@@ -1,4 +1,3 @@
-from app import df_raw
 from flask import Flask, render_template
 import json
 import pandas as pd

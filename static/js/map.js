@@ -10,9 +10,6 @@
 
 'use strict';
 
-/* ── Layout constants ─────────────────────────────────────────────────────── */
-const MAP_MARGIN  = { top: 10, right: 10, bottom: 10, left: 10 };
-
 /* ── Module-level state ───────────────────────────────────────────────────── */
 let mapSvg, mapG, mapPath, mapProjection;
 let mapWidth, mapHeight;
@@ -20,13 +17,13 @@ let mapWidth, mapHeight;
 /* Country path selection kept for highlight updates */
 let countryPaths;
 
-/* Current indicator & year driven by main.js */
-let currentIndicator = null;
-let currentYear      = null;
-let selectedCountry  = null;
+/* Current indicator & year (set by updateMap, called from main.js) */
+let map_currentIndicator = null;
+let map_currentYear = null;
+let map_selectedCountry = null;
 
 /* ── Colour scale ─────────────────────────────────────────────────────────── */
-let colorScale = null;
+let map_colorScale = null;
 
 /* ── Helper: build lookup of value per country ISO3 code ─────────────────── */
 function buildValueLookup(indicator, year) {
@@ -67,9 +64,9 @@ function drawLegend(lookup) {
         .attr('height', 30);
 
     // Gradient definition
-    const defs   = svg.append('defs');
+    const defs = svg.append('defs');
     const gradId = 'map-legend-grad';
-    const grad   = defs.append('linearGradient').attr('id', gradId);
+    const grad = defs.append('linearGradient').attr('id', gradId);
     grad.selectAll('stop')
         .data(d3.range(0, 1.01, 0.1))
         .enter().append('stop')
@@ -95,8 +92,8 @@ const mapTip = d3.select('#map-tooltip');
 function showMapTip(event, d, lookup) {
     const code = d.properties ? d.properties.id : null;
     const name = codeToName[code] || d.properties?.name || code || '—';
-    const val  = lookup[code];
-    const fmt  = (val === null || val === undefined)
+    const val = lookup[code];
+    const fmt = (val === null || val === undefined)
         ? '<em style="color:#4a5568">No data</em>'
         : `<span>${d3.format(Math.abs(val) > 1e6 ? '.3s' : Math.abs(val) > 100 ? ',.0f' : '.3f')(val)}</span>`;
 
@@ -118,18 +115,18 @@ allData.forEach(d => { codeToName[d.Code] = d.Name; });
 
 /* ── Map update (called when indicator or year changes) ─────────────────── */
 function updateMap(indicator, year) {
-    currentIndicator = indicator;
-    currentYear      = year;
+    map_currentIndicator = indicator;
+    map_currentYear = year;
 
     const lookup = buildValueLookup(indicator, year);
-    colorScale    = buildColorScale(lookup);
+    map_colorScale = buildColorScale(lookup);
 
     // Update country fill colours
     countryPaths
         .classed('no-data', d => lookup[(d.properties?.id)] === null || lookup[(d.properties?.id)] === undefined)
         .attr('fill', d => {
             const v = lookup[d.properties?.id];
-            return (v === null || v === undefined) ? '#2a2d3e' : colorScale(v);
+            return (v === null || v === undefined) ? '#2a2d3e' : map_colorScale(v);
         });
 
     // Update map subtitle
@@ -140,7 +137,7 @@ function updateMap(indicator, year) {
 
 /* ── Highlight a selected country ────────────────────────────────────────── */
 function highlightCountry(name) {
-    selectedCountry = name;
+    map_selectedCountry = name;
     countryPaths
         .classed('selected', d => codeToName[d.properties?.id] === name);
 }
@@ -148,13 +145,13 @@ function highlightCountry(name) {
 /* ── initMap ─────────────────────────────────────────────────────────────── */
 function initMap() {
     const container = document.getElementById('map-section');
-    const svgEl     = document.getElementById('svg_map');
+    const svgEl = document.getElementById('svg_map');
 
-    mapWidth  = svgEl.clientWidth  || 820;
+    mapWidth = svgEl.clientWidth || 820;
     mapHeight = svgEl.clientHeight || 460;
 
     mapSvg = d3.select('#svg_map')
-        .attr('width',  mapWidth)
+        .attr('width', mapWidth)
         .attr('height', mapHeight);
 
     mapProjection = d3.geoEqualEarth()
@@ -176,10 +173,10 @@ function initMap() {
             .attr('d', mapPath)
             .attr('fill', '#2a2d3e')
             .on('mouseover', function (event, d) {
-                showMapTip(event, d, buildValueLookup(currentIndicator, currentYear) || {});
+                showMapTip(event, d, buildValueLookup(map_currentIndicator, map_currentYear) || {});
             })
             .on('mousemove', moveMapTip)
-            .on('mouseout',  hideMapTip)
+            .on('mouseout', hideMapTip)
             .on('click', function (event, d) {
                 const code = d.properties?.id;
                 const name = codeToName[code];
