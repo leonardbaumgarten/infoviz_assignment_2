@@ -2,44 +2,110 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>InfoVis VU 2026</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="InfoVis VU 2026 – Exercise 2: Agricultural & Rural Development data visualisation with choropleth map and PCA scatterplot.">
+    <title>InfoVis VU 2026 – Exercise 2</title>
 
-    <link rel="stylesheet" type="text/css" href="{{url_for('static',filename='styles/style.css')}}">
+    <!-- Google Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
+    <!-- Stylesheet -->
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='styles/style.css') }}">
+
+    <!-- D3 & TopoJSON -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.0/topojson.min.js"></script>
-    <script src="{{url_for('static',filename='js/map.js')}}"></script>
-
 </head>
 <body>
 
-<h1>InfoVis VU 2026 - Exercise 2</h1>
-<p>Enter your name and Matrikelnummer</p>
-
-
-<div id="main_container" class="main_container">
-    <div class="container_l">
-        <svg id="svg_map"></svg>
+<!-- ── Header ─────────────────────────────────────────────────────────────── -->
+<header class="site-header">
+    <div class="header-inner">
+        <div class="header-title">
+            <span class="badge">InfoVis VU 2026</span>
+            <h1>Agricultural &amp; Rural Development</h1>
+            <p class="subtitle">Exercise 2 — Interactive Data Visualisation</p>
+        </div>
+        <div class="header-meta">
+            <span id="country-count" class="stat-pill">49 countries</span>
+            <span id="year-range-pill" class="stat-pill">1960 – 2020</span>
+        </div>
     </div>
-    <div class="container_r">
-        <p></p>
-        <svg id="svg_plot"></svg>
+</header>
+
+<!-- ── Controls ──────────────────────────────────────────────────────────── -->
+<section class="controls-bar">
+    <div class="control-group">
+        <label for="indicator-select" class="control-label">Indicator</label>
+        <select id="indicator-select" class="control-select"></select>
     </div>
-</div>
+    <div class="control-group">
+        <label for="year-select" class="control-label">Year</label>
+        <select id="year-select" class="control-select"></select>
+    </div>
+    <div class="selected-info" id="selected-info">
+        <span class="selected-label">Click a country to explore</span>
+    </div>
+</section>
 
-    <div id = "dropdown_div" class="dd_container">
-    <label>Indicator:</label>
-        <select id="indicator_change" class="dropdown"></select></div>
-<div id="svg_line_plot" class="svg_line_plot">
+<!-- ── Main Grid ──────────────────────────────────────────────────────────── -->
+<main class="viz-grid">
 
-</div>
+    <!-- Choropleth Map -->
+    <section class="viz-card map-card" id="map-section">
+        <div class="card-header">
+            <h2 class="card-title">World Choropleth</h2>
+            <p class="card-subtitle" id="map-subtitle">Select an indicator to colour the map</p>
+        </div>
+        <div class="map-wrapper">
+            <svg id="svg_map"></svg>
+            <div id="map-tooltip" class="tooltip" role="tooltip" aria-hidden="true"></div>
+        </div>
+        <div class="legend-wrapper" id="map-legend"></div>
+    </section>
 
+    <!-- PCA Scatterplot -->
+    <section class="viz-card scatter-card" id="scatter-section">
+        <div class="card-header">
+            <h2 class="card-title">PCA Scatterplot</h2>
+            <p class="card-subtitle" id="scatter-subtitle">
+                PCA on year <span id="pca-year">{{ pca_year }}</span>
+                — PC1: <span id="ev1"></span>% &nbsp;|&nbsp; PC2: <span id="ev2"></span>%
+            </p>
+        </div>
+        <div class="scatter-wrapper">
+            <svg id="svg_plot"></svg>
+            <div id="scatter-tooltip" class="tooltip" role="tooltip" aria-hidden="true"></div>
+        </div>
+    </section>
 
+</main>
+
+<!-- ── Line Chart ─────────────────────────────────────────────────────────── -->
+<section class="viz-card line-card" id="line-section">
+    <div class="card-header">
+        <h2 class="card-title">Time Series</h2>
+        <p class="card-subtitle" id="line-subtitle">Select a country on the map or scatterplot</p>
+    </div>
+    <div id="svg_line_plot" class="line-wrapper"></div>
+</section>
+
+<!-- ── Inject Server Data ─────────────────────────────────────────────────── -->
 <script>
-    let data = {{ data | safe }};
-    console.log(data);
-    initMap();
+    const allData     = {{ data | safe }};
+    const pcaData     = {{ pca_data | safe }};
+    const explainedVar = {{ explained_var | safe }};
+    const pcaYear     = {{ pca_year }};
+    const indicators  = {{ indicators | safe }};
+    const countries   = {{ countries | safe }};
 </script>
+
+<!-- ── Visualisation Scripts ──────────────────────────────────────────────── -->
+<script src="{{ url_for('static', filename='js/map.js') }}"></script>
+<script src="{{ url_for('static', filename='js/scatter.js') }}"></script>
+<script src="{{ url_for('static', filename='js/linechart.js') }}"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
 </body>
 </html>
