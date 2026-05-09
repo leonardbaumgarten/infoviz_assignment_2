@@ -88,3 +88,12 @@ def index():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
+
+# TODO: Task 5: PCA plot link zu world map und anders herum: land/punkt soll durch hovern angezeigt werden, nicht durch klicken
+# TODO: Task 5: Change of variable über Jahre soll nur angezeigt werden, wenn man auf ein Land in der Map klickt (nicht auch, wenn man auf einen Punkt im scatter plot klickt)
+# TODO: Task 6: Year dropdown gegen year slider austauschen und die konfiguration des year-sliders soll auch time-series lineplot "entsprechend anpassen"
+# TODO: Task 6: Auswahl des features muss auch "styling of the scatterplot" ändern
+# TODO: Task 6: Verifizieren, ob "All updates must use d3’s enter/update pattern and charts must not be fully redrawn." erfüllt ist
+# TODO: Task 6: brushing komplett, Bonus: komplett
+# TODO: Task 6: Color Themes sinnvoll anpassen
