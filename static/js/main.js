@@ -1,45 +1,63 @@
 /**
- * main.js – Application entry point & coordination
+ * main.js – Application entry point & coordination (Tasks 5 & 6)
  *
- * Populates the indicator and year dropdowns, initialises all three
- * visualisation modules, and coordinates interactions between them.
+ * Wires up the indicator dropdown, year SLIDER, and coordinates all
+ * cross-view interactions (hover, click, brush, indicator change).
  *
- * Global variables provided by Jinja2 / index.html:
- *   allData      – full filtered dataset (array of row objects)
- *   pcaData      – PCA 2-D coordinates per country for pcaYear
- *   explainedVar – [pc1_variance, pc2_variance]
- *   pcaYear      – year used for PCA (most recent = 2020)
- *   indicators   – list of numeric column names
- *   countries    – list of country names
+ * Global variables (var) from index.html / Jinja2:
+ *   allData, pcaData, explainedVar, pcaYear, indicators, countries
  */
 
 'use strict';
 
 /* ── Application state ────────────────────────────────────────────────────── */
-let currentCountry   = null;
+let currentCountry   = null;   // last clicked country (single selection)
 let currentIndicator = indicators[0];
 let currentYear      = pcaYear;
+let currentBrushed   = [];     // names from brush selection
 
-/* ── Populate the year dropdown ───────────────────────────────────────────── */
-function populateYearDropdown() {
-    const years = [...new Set(allData.map(d => d.Year))].sort((a, b) => b - a);
-    const sel   = d3.select('#year-select');
+/* ── Build the available years list once ──────────────────────────────────── */
+const availableYears = [...new Set(allData.map(d => d.Year))].sort((a, b) => a - b);
+const yearMin  = availableYears[0];
+const yearMax  = availableYears[availableYears.length - 1];
 
-    sel.selectAll('option')
-        .data(years)
-        .enter().append('option')
-        .attr('value', d => d)
-        .property('selected', d => d === pcaYear)
-        .text(d => d);
+/* ──────────────────────────────────────────────────────────────────────────
+   Year SLIDER (Task 6 – replaces the dropdown)
+   ────────────────────────────────────────────────────────────────────────── */
+function initYearSlider() {
+    const slider = document.getElementById('year-slider');
+    const label  = document.getElementById('year-slider-value');
 
-    sel.on('change', function () {
-        currentYear = +this.value;
+    slider.min   = yearMin;
+    slider.max   = yearMax;
+    slider.value = pcaYear;
+    slider.step  = 1;
+    label.textContent = pcaYear;
+
+    slider.addEventListener('input', function () {
+        // Snap to nearest available year
+        const raw   = +this.value;
+        const snapped = availableYears.reduce((prev, curr) =>
+            Math.abs(curr - raw) < Math.abs(prev - raw) ? curr : prev
+        );
+        currentYear = snapped;
+        label.textContent = snapped;
+
+        // Update choropleth map
         updateMap(currentIndicator, currentYear);
-        if (currentCountry) updateLineChart(currentCountry, currentIndicator);
+
+        // Update time series if a country is selected or brushed
+        if (currentBrushed.length > 0) {
+            updateLineChartMulti(currentBrushed, currentIndicator);
+        } else if (currentCountry) {
+            updateLineChart(currentCountry, currentIndicator);
+        }
     });
 }
 
-/* ── Populate the indicator dropdown ─────────────────────────────────────── */
+/* ──────────────────────────────────────────────────────────────────────────
+   Indicator dropdown (Task 6 – also updates scatterplot styling)
+   ────────────────────────────────────────────────────────────────────────── */
 function populateIndicatorDropdown() {
     const sel = d3.select('#indicator-select');
 
@@ -52,44 +70,107 @@ function populateIndicatorDropdown() {
 
     sel.on('change', function () {
         currentIndicator = this.value;
+
+        // 1. Update choropleth map
         updateMap(currentIndicator, currentYear);
-        if (currentCountry) updateLineChart(currentCountry, currentIndicator);
+
+        // 2. Update scatterplot styling (Task 6 requirement)
+        updateScatterStyling(currentIndicator, currentYear);
+
+        // 3. Update time series
+        if (currentBrushed.length > 0) {
+            updateLineChartMulti(currentBrushed, currentIndicator);
+        } else if (currentCountry) {
+            updateLineChart(currentCountry, currentIndicator);
+        }
     });
 }
 
-/* ── Called by map.js and scatter.js when a country is clicked ───────────── */
-function onCountrySelected(name) {
+/* ──────────────────────────────────────────────────────────────────────────
+   Cross-view interaction callbacks
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* --- Scatter hover → map highlight (Task 5) ----------------------------- */
+function onScatterHover(name) {
+    highlightCountry(name);
+}
+
+function onScatterHoverEnd() {
+    if (currentBrushed.length > 0) {
+        highlightCountriesByNames(new Set(currentBrushed));
+    } else {
+        clearMapHighlight();
+    }
+}
+
+/* --- Map hover → scatter highlight (Task 5) ----------------------------- */
+function onMapHover(name) {
+    highlightScatterCountry(name);
+}
+
+function onMapHoverEnd() {
+    if (brushedNames.size > 0) {
+        // Restore brush state in scatterplot
+        applyBrushHighlight();
+    } else {
+        clearScatterHighlight();
+    }
+}
+
+/* --- Map click → time-series line chart (Task 5) ------------------------ */
+function onMapClick(name) {
     currentCountry = name;
 
-    // Update the info pill in the controls bar
     d3.select('#selected-info').html(
         `Selected: <span class="selected-country">${name}</span>`
     );
 
-    // Highlight the country in both views
+    // Highlight
     highlightCountry(name);
     highlightScatterCountry(name);
 
-    // Update the line chart
+    // Show time series for this single country
     updateLineChart(name, currentIndicator);
 }
 
-/* ── Initialise everything ────────────────────────────────────────────────── */
+/* --- Brush selection → highlight map + update line chart (Task 6) ------- */
+function onBrushSelection(nameSet) {
+    currentBrushed = [...nameSet];
+
+    d3.select('#selected-info').html(
+        `Brushed: <span class="selected-country">${currentBrushed.length} countries</span>`
+    );
+
+    // Update line chart with all brushed countries
+    updateLineChartMulti(currentBrushed, currentIndicator);
+}
+
+function onBrushCleared() {
+    currentBrushed = [];
+    currentCountry = null;
+    clearLineChart();
+    d3.select('#selected-info').html(
+        '<span class="selected-label">Click a country to explore</span>'
+    );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Initialise everything
+   ────────────────────────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', function () {
 
     populateIndicatorDropdown();
-    populateYearDropdown();
+    initYearSlider();
 
     // Init visualisations
-    initMap();       // map.js
-    initScatter();   // scatter.js
-    initLineChart(); // linechart.js
+    initMap();
+    initScatter();
+    initLineChart();
 
-    // Wait a tiny tick for the map to load its topojson, then apply colours
-    // The map itself calls updateMap after topojson loads (triggered below)
-    // We hook in after the initial promise resolves by giving the map a callback
-    // window.onMapReady is called from map.js once topojson is loaded.
+    // Once the map's topojson is loaded, render the initial choropleth colours
+    // and apply the initial scatterplot indicator styling
     window.onMapReady = function () {
         updateMap(currentIndicator, currentYear);
+        updateScatterStyling(currentIndicator, currentYear);
     };
 });

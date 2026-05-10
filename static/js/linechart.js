@@ -1,8 +1,11 @@
 /**
- * linechart.js – Time-series line chart
+ * linechart.js – Time-series line chart (Tasks 5 & 6)
  *
- * Renders a line chart for a selected country and indicator over all years.
- * Exposed:  initLineChart(), updateLineChart(countryName, indicator)
+ * Supports both single-country display (map click) and multi-country
+ * display (brush selection).  Uses proper enter/update/exit pattern.
+ *
+ * Exports: initLineChart(), updateLineChart(countryName, indicator),
+ *          updateLineChartMulti(nameArray, indicator), clearLineChart()
  */
 
 'use strict';
@@ -10,75 +13,69 @@
 /* ── Layout ───────────────────────────────────────────────────────────────── */
 const LC_MARGIN = { top: 20, right: 30, bottom: 40, left: 64 };
 
+/* ── A small colour palette for multi-country lines ──────────────────────── */
+const LC_COLORS = [
+    '#6c8aff', '#34d399', '#f59e0b', '#ec4899', '#a78bfa',
+    '#fb923c', '#22d3ee', '#f87171', '#4ade80', '#818cf8'
+];
+
 /* ── Module state ─────────────────────────────────────────────────────────── */
 let lcSvg = null;
-let lcG   = null;
+let lcG = null;
 let lcW, lcH;
 let lcXScale, lcYScale;
-let lcXAxis, lcYAxis;
-let lcLine, lcArea;
-let lcPath, lcAreaPath, lcCircles;
+let lcClipG;
+let lcLinesG, lcDotsG;
 let lcTip;
-
-/* ── Tooltip ─────────────────────────────────────────────────────────────── */
-function createLcTooltip() {
-    lcTip = d3.select('#svg_line_plot').append('div')
-        .attr('class', 'tooltip')
-        .attr('id', 'lc-tooltip');
-}
 
 /* ── initLineChart ────────────────────────────────────────────────────────── */
 function initLineChart() {
     const container = document.getElementById('svg_line_plot');
-    const totalW = container.clientWidth  || 900;
+    const totalW = container.clientWidth || 900;
     const totalH = container.clientHeight || 280;
 
     lcW = totalW - LC_MARGIN.left - LC_MARGIN.right;
-    lcH = totalH - LC_MARGIN.top  - LC_MARGIN.bottom;
+    lcH = totalH - LC_MARGIN.top - LC_MARGIN.bottom;
 
     lcSvg = d3.select('#svg_line_plot')
         .append('svg')
-        .attr('width',  totalW)
+        .attr('width', totalW)
         .attr('height', totalH);
 
-    // Gradient definition
+    // Gradient
     const defs = lcSvg.append('defs');
     const grad = defs.append('linearGradient')
         .attr('id', 'area-gradient')
         .attr('gradientUnits', 'userSpaceOnUse')
         .attr('x1', 0).attr('y1', 0)
         .attr('x2', 0).attr('y2', lcH);
-
     grad.append('stop').attr('offset', '0%')
         .attr('stop-color', '#6c8aff').attr('stop-opacity', 0.5);
     grad.append('stop').attr('offset', '100%')
         .attr('stop-color', '#6c8aff').attr('stop-opacity', 0);
 
-    lcG = lcSvg.append('g')
-        .attr('transform', `translate(${LC_MARGIN.left},${LC_MARGIN.top})`);
-
     // Clip path
     defs.append('clipPath').attr('id', 'lc-clip')
         .append('rect').attr('width', lcW).attr('height', lcH);
 
-    // Scales (will be updated per data)
+    lcG = lcSvg.append('g')
+        .attr('transform', `translate(${LC_MARGIN.left},${LC_MARGIN.top})`);
+
+    // Scales
     lcXScale = d3.scaleLinear().range([0, lcW]);
     lcYScale = d3.scaleLinear().range([lcH, 0]);
 
-    // Axis containers
+    // Axes containers
     lcG.append('g').attr('class', 'x-axis axis').attr('transform', `translate(0,${lcH})`);
     lcG.append('g').attr('class', 'y-axis axis');
 
     // Grid
     lcG.append('g').attr('class', 'lc-grid-h');
-    lcG.append('g').attr('class', 'lc-grid-v');
 
-    // Area + line (with clip)
-    const clipG = lcG.append('g').attr('clip-path', 'url(#lc-clip)');
-
-    lcAreaPath = clipG.append('path').attr('class', 'line-area');
-    lcPath     = clipG.append('path').attr('class', 'line-path');
-    lcCircles  = clipG.append('g').attr('class', 'lc-circles');
+    // Clipped drawing area
+    lcClipG = lcG.append('g').attr('clip-path', 'url(#lc-clip)');
+    lcLinesG = lcClipG.append('g').attr('class', 'lc-lines-container');
+    lcDotsG = lcClipG.append('g').attr('class', 'lc-dots-container');
 
     // Axis labels
     lcG.append('text').attr('class', 'axis-label').attr('id', 'lc-y-label')
@@ -90,42 +87,58 @@ function initLineChart() {
         .attr('x', lcW / 2).attr('y', lcH + 36)
         .attr('text-anchor', 'middle').text('Year');
 
+    // Legend container for multi-country
+    lcG.append('g').attr('class', 'lc-legend')
+        .attr('transform', `translate(${lcW - 10},10)`);
+
     // Tooltip
     lcTip = d3.select('body').append('div')
         .attr('class', 'tooltip')
         .attr('id', 'lc-tooltip');
 }
 
-/* ── updateLineChart ──────────────────────────────────────────────────────── */
+/* ── Single-country update (map click) ────────────────────────────────────── */
 function updateLineChart(countryName, indicator) {
-    if (!lcSvg || !countryName || !indicator) return;
+    updateLineChartMulti([countryName], indicator);
+}
 
-    // Filter & sort data
-    const raw = allData
-        .filter(d => d.Name === countryName && d[indicator] !== null && d[indicator] !== undefined && !isNaN(d[indicator]))
-        .sort((a, b) => a.Year - b.Year);
+/* ── Multi-country update (brush / single click) ─────────────────────────── */
+function updateLineChartMulti(nameArray, indicator) {
+    if (!lcSvg || !nameArray || nameArray.length === 0 || !indicator) return;
 
-    if (raw.length === 0) {
-        lcPath.attr('d', null);
-        lcAreaPath.attr('d', null);
-        lcCircles.selectAll('*').remove();
-        d3.select('#line-subtitle').text(`No data for "${indicator}" in ${countryName}`);
+    // Build per-country data arrays
+    const series = nameArray.map((name, i) => {
+        const raw = allData
+            .filter(d => d.Name === name && d[indicator] != null && !isNaN(d[indicator]))
+            .sort((a, b) => a.Year - b.Year);
+        return { name, data: raw, color: LC_COLORS[i % LC_COLORS.length] };
+    }).filter(s => s.data.length > 0);
+
+    if (series.length === 0) {
+        clearLineChart();
+        d3.select('#line-subtitle').text(`No data for "${indicator}"`);
         return;
     }
 
-    // Update subtitle
-    d3.select('#line-subtitle').text(`${countryName} · ${indicator}`);
+    // Subtitle
+    const subtitle = series.map(s => s.name).join(', ');
+    d3.select('#line-subtitle').text(
+        (subtitle.length > 80 ? subtitle.substring(0, 80) + '…' : subtitle) + ' · ' + indicator
+    );
+
+    // All data points concatenated for computing scale domains
+    const allPts = series.flatMap(s => s.data);
 
     // Update scales
-    lcXScale.domain(d3.extent(raw, d => d.Year));
-    const [yLo, yHi] = d3.extent(raw, d => +d[indicator]);
+    lcXScale.domain(d3.extent(allPts, d => d.Year));
+    const [yLo, yHi] = d3.extent(allPts, d => +d[indicator]);
     const yPad = (yHi - yLo) * 0.1 || 1;
     lcYScale.domain([yLo - yPad, yHi + yPad]);
 
-    // Update axes
+    // Update axes (transition, no redraw)
     const xAxis = d3.axisBottom(lcXScale).ticks(8).tickFormat(d3.format('d')).tickSize(-lcH);
     const yAxis = d3.axisLeft(lcYScale).ticks(5).tickSize(-lcW);
-    const fmt   = yHi > 1e6 ? '.2s' : yHi > 100 ? ',.0f' : '.3f';
+    const fmt = yHi > 1e6 ? '.2s' : yHi > 100 ? ',.0f' : '.3f';
     yAxis.tickFormat(d3.format(fmt));
 
     lcG.select('.x-axis').transition().duration(400).call(xAxis).select('.domain').remove();
@@ -148,42 +161,94 @@ function updateLineChart(countryName, indicator) {
         .y(d => lcYScale(+d[indicator]))
         .curve(d3.curveCatmullRom.alpha(0.5));
 
-    const areaGen = d3.area()
-        .x(d => lcXScale(d.Year))
-        .y0(lcH)
-        .y1(d => lcYScale(+d[indicator]))
-        .curve(d3.curveCatmullRom.alpha(0.5));
+    /* ── Lines – enter/update/exit ────────────────────────────────────────── */
+    const lineSel = lcLinesG.selectAll('path.lc-series-line')
+        .data(series, d => d.name);
 
-    lcPath.datum(raw)
-        .transition().duration(500)
-        .attr('d', lineGen);
+    // Enter
+    lineSel.enter().append('path')
+        .attr('class', 'lc-series-line')
+        .attr('fill', 'none')
+        .attr('stroke', d => d.color)
+        .attr('stroke-width', 2.5)
+        .attr('stroke-linecap', 'round')
+        .attr('stroke-linejoin', 'round')
+        .attr('d', d => lineGen(d.data));
 
-    lcAreaPath.datum(raw)
-        .transition().duration(500)
-        .attr('d', areaGen);
+    // Update
+    lineSel.transition().duration(500)
+        .attr('stroke', d => d.color)
+        .attr('d', d => lineGen(d.data));
 
-    // Dots
-    const circles = lcCircles.selectAll('circle').data(raw, d => d.Year);
-    circles.enter().append('circle')
-        .attr('class', 'line-dot')
+    // Exit
+    lineSel.exit().transition().duration(200).style('opacity', 0).remove();
+
+    /* ── Dots – enter/update/exit ─────────────────────────────────────────── */
+    // Flatten series into individual point data
+    const ptData = series.flatMap(s =>
+        s.data.map(d => ({ ...d, _key: s.name + '-' + d.Year, _color: s.color }))
+    );
+
+    const dotSel = lcDotsG.selectAll('circle.lc-pt')
+        .data(ptData, d => d._key);
+
+    // Enter
+    dotSel.enter().append('circle')
+        .attr('class', 'lc-pt line-dot')
+        .attr('r', 3)
+        .attr('fill', d => d._color)
         .attr('cx', d => lcXScale(d.Year))
         .attr('cy', d => lcYScale(+d[indicator]))
-        .attr('r', 3.5)
-        .attr('fill', '#6c8aff')
         .on('mouseover', function (event, d) {
             const fmt2 = Math.abs(+d[indicator]) > 1e6 ? '.3s' : Math.abs(+d[indicator]) > 100 ? ',.0f' : '.3f';
             lcTip.html(`
-                <div class="tt-country">${d.Year}</div>
+                <div class="tt-country">${d.Name} · ${d.Year}</div>
                 <div class="tt-value"><span>${d3.format(fmt2)(+d[indicator])}</span></div>
             `).classed('visible', true);
             const [mx, my] = d3.pointer(event, document.body);
             lcTip.style('left', `${mx + 14}px`).style('top', `${my - 10}px`);
         })
-        .on('mouseout', () => lcTip.classed('visible', false))
-        .merge(circles)
-        .transition().duration(500)
+        .on('mouseout', () => lcTip.classed('visible', false));
+
+    // Update
+    dotSel.transition().duration(500)
+        .attr('fill', d => d._color)
         .attr('cx', d => lcXScale(d.Year))
         .attr('cy', d => lcYScale(+d[indicator]));
 
-    circles.exit().remove();
+    // Exit
+    dotSel.exit().transition().duration(200).style('opacity', 0).remove();
+
+    /* ── Legend (enter/update/exit) ────────────────────────────────────────── */
+    if (series.length > 1) {
+        const legG = lcG.select('.lc-legend');
+        const legItems = legG.selectAll('g.lc-legend-item')
+            .data(series, d => d.name);
+
+        const enter = legItems.enter().append('g')
+            .attr('class', 'lc-legend-item')
+            .attr('transform', (d, i) => `translate(0, ${i * 16})`);
+        enter.append('rect').attr('width', 10).attr('height', 10).attr('rx', 2);
+        enter.append('text').attr('x', -6).attr('y', 9)
+            .attr('class', 'axis-label')
+            .attr('text-anchor', 'end');
+
+        const merged = enter.merge(legItems)
+            .attr('transform', (d, i) => `translate(0, ${i * 16})`);
+        merged.select('rect').attr('fill', d => d.color);
+        merged.select('text').text(d => d.name.length > 18 ? d.name.substring(0, 18) + '…' : d.name);
+
+        legItems.exit().remove();
+    } else {
+        lcG.select('.lc-legend').selectAll('*').remove();
+    }
+}
+
+/* ── Clear the line chart ─────────────────────────────────────────────────── */
+function clearLineChart() {
+    if (!lcLinesG) return;
+    lcLinesG.selectAll('*').transition().duration(200).style('opacity', 0).remove();
+    lcDotsG.selectAll('*').transition().duration(200).style('opacity', 0).remove();
+    lcG.select('.lc-legend').selectAll('*').remove();
+    d3.select('#line-subtitle').text('Select a country on the map or brush in the scatterplot');
 }
