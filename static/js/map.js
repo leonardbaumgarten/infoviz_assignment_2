@@ -16,7 +16,7 @@ const nameToCode = {};
 allData.forEach(d => { codeToName[d.Code] = d.Name; nameToCode[d.Name] = d.Code; });
 
 /* Neutral colour interpolator used by both map and scatterplot */
-const MAP_INTERPOLATOR = d3.interpolatePlasma;
+const MAP_INTERPOLATOR = d3.interpolateRgb("#1a1a24", "#00d0ff");
 
 /* Tooltip indicator list (details-on-demand) */
 const TOOLTIP_INDICATORS = [
