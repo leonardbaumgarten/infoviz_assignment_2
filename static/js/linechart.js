@@ -1,7 +1,7 @@
 'use strict';
 
 /* Layout: extra-wide left margin to host the legend outside the plot area */
-const LC_MARGIN = { top: 20, right: 30, bottom: 40, left: 60 };
+const LC_MARGIN = { top: 20, right: 30, bottom: 40, left: 85 };
 const LC_COLORS = [
     '#6c8aff', '#34d399', '#f59e0b', '#ec4899', '#a78bfa',
     '#fb923c', '#22d3ee', '#f87171', '#4ade80', '#818cf8'
