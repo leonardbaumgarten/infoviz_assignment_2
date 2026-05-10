@@ -1,7 +1,7 @@
 'use strict';
 
 /* Layout and colour constants */
-const SC_MARGIN = { top: 20, right: 20, bottom: 50, left: 54 };
+const SC_MARGIN = { top: 20, right: 20, bottom: 50, left: 60 };
 const DOT_DIM = '#2a3050';
 const DOT_FALLBACK = '#6c8aff';
 
