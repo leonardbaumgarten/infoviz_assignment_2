@@ -4,7 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Agricultural & Rural Development – Interactive Data Visualisation with choropleth map and PCA scatterplot.">
+    <meta name="description"
+        content="Agricultural & Rural Development – Interactive Data Visualisation with choropleth map and PCA scatterplot.">
     <title>Agricultural & Rural Development</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -50,8 +51,10 @@
             <div class="card-header">
                 <h2 class="card-title">World Choropleth</h2>
                 <p class="card-subtitle" id="map-subtitle">Select an indicator to colour the map</p>
+                <span class="zoom-hint"> Scroll to zoom, drag to pan</span>
                 <div class="country-search-wrapper">
-                    <input type="text" id="country-search" list="country-datalist" placeholder="Search country..." autocomplete="off">
+                    <input type="text" id="country-search" list="country-datalist" placeholder="Search country..."
+                        autocomplete="off">
                     <datalist id="country-datalist"></datalist>
                 </div>
             </div>
@@ -68,7 +71,8 @@
                     PCA on year <span id="pca-year">{{ pca_year }}</span>
                     — PC1: <span id="ev1"></span>% &nbsp;|&nbsp; PC2: <span id="ev2"></span>%
                 </p>
-                <button id="clear-brush-btn" class="clear-brush-btn" title="Clear brush selection">✕ Clear Brush</button>
+                <button id="clear-brush-btn" class="clear-brush-btn" title="Clear brush selection">✕ Clear
+                    Brush</button>
             </div>
             <div class="scatter-wrapper">
                 <svg id="svg_plot"></svg>
@@ -87,19 +91,21 @@
     </section>
 
     <script>
-        var allData      = {{ data | safe }};
-        var pcaData      = {{ pca_data | safe }};
+        var allData = {{ data | safe }};
+        var pcaData = {{ pca_data | safe }};
         var explainedVar = {{ explained_var | safe }};
-        var pcaYear      = {{ pca_year }};
-        var indicators   = {{ indicators | safe }};
-        var countries    = {{ countries | safe }};
+        var pcaYear = {{ pca_year }};
+        var indicators = {{ indicators | safe }};
+        var countries = {{ countries | safe }};
     </script>
 
     <div id="map-tooltip" class="tooltip" role="tooltip" aria-hidden="true"></div>
 
-    <div id="js-error-box" style="display:none;position:fixed;top:0;left:0;right:0;background:#c0392b;color:#fff;padding:12px 16px;font-family:monospace;font-size:13px;z-index:9999;"></div>
+    <div id="js-error-box"
+        style="display:none;position:fixed;top:0;left:0;right:0;background:#c0392b;color:#fff;padding:12px 16px;font-family:monospace;font-size:13px;z-index:9999;">
+    </div>
     <script>
-        window.addEventListener('error', function(e) {
+        window.addEventListener('error', function (e) {
             var box = document.getElementById('js-error-box');
             box.style.display = 'block';
             box.textContent = 'JS ERROR: ' + e.message + ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')';
