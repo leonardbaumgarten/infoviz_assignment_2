@@ -1,40 +1,20 @@
-/**
- * scatter.js – PCA Scatterplot (Tasks 3, 5, 6)
- *
- * Renders a 2-D PCA scatterplot from pcaData.
- *
- * Interactions:
- *  - Hover  → highlight corresponding country on the map (Task 5)
- *  - NO click (line chart is triggered only from the map)
- *  - d3.brush → rectangular selection → highlight map + update line chart (Task 6)
- *
- * Styling update on indicator change via enter/update pattern (Task 6).
- *
- * Exports: initScatter(), highlightScatterCountry(name),
- *          highlightScatterCountries(nameSet), clearScatterHighlight(),
- *          updateScatterStyling(indicator, year)
- */
-
 'use strict';
 
-/* ── Layout ───────────────────────────────────────────────────────────────── */
+/* Layout and colour constants */
 const SC_MARGIN = { top: 20, right: 20, bottom: 50, left: 54 };
+const DOT_DIM = '#2a3050';
+const DOT_FALLBACK = '#6c8aff';
 
-/* ── Colour palette ───────────────────────────────────────────────────────── */
-const DOT_NORMAL   = '#6c8aff';
-const DOT_SELECTED = '#34d399';
-const DOT_BRUSHED  = '#f59e0b';
-const DOT_DIM      = '#2a3050';
-
-/* ── Module state ─────────────────────────────────────────────────────────── */
+/* Module state */
 let scatterSvg, scatterG;
 let scW, scH;
 let xScale, yScale;
 let dots, labels;
 let scatterBrush;
-let brushedNames = new Set();  // shared with main.js
+let brushedNames = new Set();
+let scatterColorFn = null;
 
-/* ── Tooltip ─────────────────────────────────────────────────────────────── */
+/* Tooltip */
 const scTip = d3.select('#scatter-tooltip');
 
 function showScTip(event, d) {
@@ -47,37 +27,40 @@ function showScTip(event, d) {
 }
 
 function moveScTip(event) {
-    const [mx, my] = d3.pointer(event, document.body);
-    scTip.style('left', `${mx + 14}px`).style('top', `${my - 10}px`);
+    scTip.style('left', `${event.clientX + 14}px`).style('top', `${event.clientY - 10}px`);
 }
 
 function hideScTip() { scTip.classed('visible', false); }
 
-/* ── Update explained variance label ─────────────────────────────────────── */
+/* Resting fill: uses map-synced colour or fallback */
+function dotRestingFill(d) {
+    return scatterColorFn ? scatterColorFn(d) : DOT_FALLBACK;
+}
+
 function updateEVLabels() {
     document.getElementById('ev1').textContent = (explainedVar[0] * 100).toFixed(1);
     document.getElementById('ev2').textContent = (explainedVar[1] * 100).toFixed(1);
 }
 
-/* ── initScatter ──────────────────────────────────────────────────────────── */
+/* Initialize PCA scatterplot */
 function initScatter() {
     updateEVLabels();
 
-    const svgEl  = document.getElementById('svg_plot');
-    const totalW = svgEl.clientWidth  || 460;
+    const svgEl = document.getElementById('svg_plot');
+    const totalW = svgEl.clientWidth || 460;
     const totalH = svgEl.clientHeight || 460;
 
     scW = totalW - SC_MARGIN.left - SC_MARGIN.right;
-    scH = totalH - SC_MARGIN.top  - SC_MARGIN.bottom;
+    scH = totalH - SC_MARGIN.top - SC_MARGIN.bottom;
 
     scatterSvg = d3.select('#svg_plot')
-        .attr('width',  totalW)
+        .attr('width', totalW)
         .attr('height', totalH);
 
     scatterG = scatterSvg.append('g')
         .attr('transform', `translate(${SC_MARGIN.left},${SC_MARGIN.top})`);
 
-    /* ── Scales ───────────────────────────────────────────────────────────── */
+    /* D3 scales */
     const pc1Ext = d3.extent(pcaData, d => d.pc1);
     const pc2Ext = d3.extent(pcaData, d => d.pc2);
     const pc1Pad = (pc1Ext[1] - pc1Ext[0]) * 0.12;
@@ -91,7 +74,7 @@ function initScatter() {
         .domain([pc2Ext[0] - pc2Pad, pc2Ext[1] + pc2Pad])
         .range([scH, 0]);
 
-    /* ── Grid ─────────────────────────────────────────────────────────────── */
+    /* Grid lines */
     scatterG.append('g').attr('class', 'sc-grid-h')
         .selectAll('line').data(yScale.ticks(6))
         .enter().append('line').attr('class', 'grid-line')
@@ -104,7 +87,6 @@ function initScatter() {
         .attr('y1', 0).attr('y2', scH)
         .attr('x1', d => xScale(d)).attr('x2', d => xScale(d));
 
-    /* Zero axes */
     scatterG.append('line').attr('class', 'grid-line')
         .attr('x1', xScale(0)).attr('x2', xScale(0))
         .attr('y1', 0).attr('y2', scH)
@@ -115,7 +97,7 @@ function initScatter() {
         .attr('y1', yScale(0)).attr('y2', yScale(0))
         .style('stroke', 'rgba(255,255,255,0.15)').style('stroke-dasharray', 'none');
 
-    /* ── Axes ──────────────────────────────────────────────────────────────── */
+    /* Axes */
     scatterG.append('g').attr('class', 'x-axis axis')
         .attr('transform', `translate(0,${scH})`)
         .call(d3.axisBottom(xScale).ticks(6).tickSize(-scH))
@@ -139,7 +121,17 @@ function initScatter() {
         .attr('text-anchor', 'middle')
         .text(`PC 2  (${ev2Pct}% variance)`);
 
-    /* ── Dots (enter) ─────────────────────────────────────────────────────── */
+    /* Brush layer (rendered underneath dots) */
+    scatterBrush = d3.brush()
+        .extent([[0, 0], [scW, scH]])
+        .on('brush', onBrushMove)
+        .on('end', onBrushEnd);
+
+    scatterG.append('g')
+        .attr('class', 'scatter-brush')
+        .call(scatterBrush);
+
+    /* Dots (on top of brush for pointer events) */
     dots = scatterG.selectAll('circle.dot')
         .data(pcaData, d => d.code)
         .enter().append('circle')
@@ -148,10 +140,9 @@ function initScatter() {
         .attr('cx', d => xScale(d.pc1))
         .attr('cy', d => yScale(d.pc2))
         .attr('r', 5)
-        .attr('fill', DOT_NORMAL)
+        .attr('fill', DOT_FALLBACK)
         .attr('stroke', 'rgba(255,255,255,0.25)')
         .attr('stroke-width', 1)
-        /* ── Hover → highlight country on map (Task 5) ────────────────── */
         .on('mouseover', function (event, d) {
             showScTip(event, d);
             d3.select(this).raise();
@@ -162,9 +153,8 @@ function initScatter() {
             hideScTip();
             onScatterHoverEnd();
         });
-        /* NO click – line chart is triggered only from the map (Task 5) */
 
-    /* ── Labels (enter) ───────────────────────────────────────────────────── */
+    /* Country code labels */
     labels = scatterG.selectAll('text.dot-label')
         .data(pcaData, d => d.code)
         .enter().append('text')
@@ -175,18 +165,13 @@ function initScatter() {
         .text(d => d.code)
         .style('pointer-events', 'none');
 
-    /* ── d3.brush for rectangular selection (Task 6) ──────────────────────── */
-    scatterBrush = d3.brush()
-        .extent([[0, 0], [scW, scH]])
-        .on('brush', onBrushMove)
-        .on('end',   onBrushEnd);
-
-    scatterG.append('g')
-        .attr('class', 'scatter-brush')
-        .call(scatterBrush);
+    /* Clear brush button */
+    document.getElementById('clear-brush-btn').addEventListener('click', function () {
+        d3.select('.scatter-brush').call(scatterBrush.move, null);
+    });
 }
 
-/* ── Brush handlers ───────────────────────────────────────────────────────── */
+/* Brush event handlers */
 function onBrushMove(event) {
     if (!event.selection) return;
     const [[x0, y0], [x1, y1]] = event.selection;
@@ -200,31 +185,26 @@ function onBrushMove(event) {
         }
     });
 
-    // Highlight in scatterplot
     applyBrushHighlight();
-
-    // Highlight on map
     highlightCountriesByNames(brushedNames);
 }
 
 function onBrushEnd(event) {
     if (!event.selection) {
-        // Brush cleared → reset
         brushedNames = new Set();
         clearScatterHighlight();
         clearMapHighlight();
         onBrushCleared();
         return;
     }
-    // Final brush selection → update line chart for all brushed countries
     onBrushSelection(brushedNames);
 }
 
-/* ── Apply brushing visual state ──────────────────────────────────────────── */
+/* Visual state for active brush selection */
 function applyBrushHighlight() {
     if (brushedNames.size === 0) {
         dots
-            .attr('fill', DOT_NORMAL)
+            .attr('fill', d => dotRestingFill(d))
             .attr('r', 5)
             .attr('stroke', 'rgba(255,255,255,0.25)')
             .attr('stroke-width', 1)
@@ -233,10 +213,10 @@ function applyBrushHighlight() {
         return;
     }
     dots
-        .attr('fill', d => brushedNames.has(d.name) ? DOT_BRUSHED : DOT_DIM)
-        .attr('r',    d => brushedNames.has(d.name) ? 7 : 4)
-        .attr('stroke', d => brushedNames.has(d.name) ? '#fff' : 'rgba(255,255,255,0.1)')
-        .attr('stroke-width', d => brushedNames.has(d.name) ? 1.5 : 0.5)
+        .attr('fill', d => brushedNames.has(d.name) ? dotRestingFill(d) : DOT_DIM)
+        .attr('r', d => brushedNames.has(d.name) ? 8 : 4)
+        .attr('stroke', d => brushedNames.has(d.name) ? '#ffffff' : 'rgba(255,255,255,0.1)')
+        .attr('stroke-width', d => brushedNames.has(d.name) ? 2.5 : 0.5)
         .classed('dimmed', d => !brushedNames.has(d.name));
 
     labels
@@ -244,14 +224,14 @@ function applyBrushHighlight() {
         .style('opacity', d => brushedNames.has(d.name) ? 1 : 0.15);
 }
 
-/* ── Single-country hover highlight (from map hover) ─────────────────────── */
+/* Single-country hover highlight (colorblind-safe: white stroke + enlarged radius, keeps data fill) */
 function highlightScatterCountry(name) {
-    if (brushedNames.size > 0) return; // don't override brush
+    if (brushedNames.size > 0) return;
     dots
-        .attr('fill', d => d.name === name ? DOT_SELECTED : DOT_NORMAL)
-        .attr('r',    d => d.name === name ? 8 : 5)
-        .attr('stroke', d => d.name === name ? '#fff' : 'rgba(255,255,255,0.25)')
-        .attr('stroke-width', d => d.name === name ? 2 : 1);
+        .attr('fill', d => dotRestingFill(d))
+        .attr('r', d => d.name === name ? 9 : 5)
+        .attr('stroke', d => d.name === name ? '#ffffff' : 'rgba(255,255,255,0.25)')
+        .attr('stroke-width', d => d.name === name ? 3 : 1);
 
     labels
         .classed('highlighted', d => d.name === name)
@@ -263,7 +243,6 @@ function highlightScatterCountry(name) {
     }
 }
 
-/** Highlight a SET of country names (used by brushing). */
 function highlightScatterCountries(nameSet) {
     brushedNames = nameSet;
     applyBrushHighlight();
@@ -272,7 +251,7 @@ function highlightScatterCountries(nameSet) {
 function clearScatterHighlight() {
     brushedNames = new Set();
     dots
-        .attr('fill', DOT_NORMAL)
+        .attr('fill', d => dotRestingFill(d))
         .attr('r', 5)
         .attr('stroke', 'rgba(255,255,255,0.25)')
         .attr('stroke-width', 1)
@@ -280,35 +259,13 @@ function clearScatterHighlight() {
     labels.style('opacity', 0.4).classed('highlighted', false);
 }
 
-/**
- * Task 6 – Indicator-based styling update (enter/update pattern).
- * Colour-encode each dot by the currently selected indicator's value.
- */
+/* Sync scatterplot dot colours with map colour scale (uses YlOrRd from map.js) */
 function updateScatterStyling(indicator, year) {
     if (!dots) return;
-    if (brushedNames.size > 0) return; // don't override brush colours
+    if (brushedNames.size > 0) return;
 
-    // Build a value lookup for the chosen indicator & year
-    const lookup = {};
-    allData.forEach(d => {
-        if (d.Year === year) {
-            const v = d[indicator];
-            if (v !== null && v !== undefined && !isNaN(v)) lookup[d.Code] = +v;
-        }
-    });
+    scatterColorFn = d => getMapColorForCode(d.code);
 
-    const values = Object.values(lookup);
-    if (values.length === 0) return;
-
-    const [lo, hi] = d3.extent(values);
-    const scale = d3.scaleSequential()
-        .domain([lo, hi])
-        .interpolator(d3.interpolatePlasma);
-
-    // Update (transition, no redraw) – enter/update pattern with existing selection
     dots.transition().duration(400)
-        .attr('fill', d => {
-            const v = lookup[d.code];
-            return (v !== undefined) ? scale(v) : DOT_NORMAL;
-        });
+        .attr('fill', d => scatterColorFn(d));
 }

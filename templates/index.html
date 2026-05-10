@@ -4,31 +4,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description"
-        content="InfoVis VU 2026 – Exercise 2: Agricultural & Rural Development data visualisation with choropleth map and PCA scatterplot.">
-    <title>InfoVis VU 2026 – Exercise 2</title>
+    <meta name="description" content="Agricultural & Rural Development – Interactive Data Visualisation with choropleth map and PCA scatterplot.">
+    <title>Agricultural & Rural Development</title>
 
-    <!-- Google Font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
-    <!-- Stylesheet -->
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='styles/style.css') }}">
 
-    <!-- D3 & TopoJSON -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.0/topojson.min.js"></script>
 </head>
 
 <body>
 
-    <!-- ── Header ─────────────────────────────────────────────────────────────── -->
     <header class="site-header">
         <div class="header-inner">
             <div class="header-title">
-                <span class="badge">InfoVis VU 2026</span>
                 <h1>Agricultural &amp; Rural Development</h1>
-                <p class="subtitle">Exercise 2 — Interactive Data Visualisation</p>
             </div>
             <div class="header-meta">
                 <span id="country-count" class="stat-pill">49 countries</span>
@@ -37,7 +29,6 @@
         </div>
     </header>
 
-    <!-- ── Controls ──────────────────────────────────────────────────────────── -->
     <section class="controls-bar">
         <div class="control-group">
             <label for="indicator-select" class="control-label">Indicator</label>
@@ -53,10 +44,8 @@
         </div>
     </section>
 
-    <!-- ── Main Grid ──────────────────────────────────────────────────────────── -->
     <main class="viz-grid">
 
-        <!-- Choropleth Map -->
         <section class="viz-card map-card" id="map-section">
             <div class="card-header">
                 <h2 class="card-title">World Choropleth</h2>
@@ -64,12 +53,10 @@
             </div>
             <div class="map-wrapper">
                 <svg id="svg_map"></svg>
-                <div id="map-tooltip" class="tooltip" role="tooltip" aria-hidden="true"></div>
             </div>
             <div class="legend-wrapper" id="map-legend"></div>
         </section>
 
-        <!-- PCA Scatterplot -->
         <section class="viz-card scatter-card" id="scatter-section">
             <div class="card-header">
                 <h2 class="card-title">PCA Scatterplot</h2>
@@ -77,6 +64,7 @@
                     PCA on year <span id="pca-year">{{ pca_year }}</span>
                     — PC1: <span id="ev1"></span>% &nbsp;|&nbsp; PC2: <span id="ev2"></span>%
                 </p>
+                <button id="clear-brush-btn" class="clear-brush-btn" title="Clear brush selection">✕ Clear Brush</button>
             </div>
             <div class="scatter-wrapper">
                 <svg id="svg_plot"></svg>
@@ -86,18 +74,15 @@
 
     </main>
 
-    <!-- ── Line Chart ─────────────────────────────────────────────────────────── -->
     <section class="viz-card line-card" id="line-section">
         <div class="card-header">
             <h2 class="card-title">Time Series</h2>
-            <p class="card-subtitle" id="line-subtitle">Select a country on the map or scatterplot</p>
+            <p class="card-subtitle" id="line-subtitle">Select a country on the map or brush in the scatterplot</p>
         </div>
         <div id="svg_line_plot" class="line-wrapper"></div>
     </section>
 
-    <!-- ── Inject Server Data ─────────────────────────────────────────────────── -->
     <script>
-        // Non-strict: plain var so all subsequent strict scripts can read these as globals
         var allData      = {{ data | safe }};
         var pcaData      = {{ pca_data | safe }};
         var explainedVar = {{ explained_var | safe }};
@@ -106,7 +91,8 @@
         var countries    = {{ countries | safe }};
     </script>
 
-    <!-- Visible error overlay for debugging -->
+    <div id="map-tooltip" class="tooltip" role="tooltip" aria-hidden="true"></div>
+
     <div id="js-error-box" style="display:none;position:fixed;top:0;left:0;right:0;background:#c0392b;color:#fff;padding:12px 16px;font-family:monospace;font-size:13px;z-index:9999;"></div>
     <script>
         window.addEventListener('error', function(e) {
@@ -116,7 +102,6 @@
         });
     </script>
 
-    <!-- ── Visualisation Scripts ──────────────────────────────────────────────── -->
     <script src="{{ url_for('static', filename='js/map.js') }}"></script>
     <script src="{{ url_for('static', filename='js/scatter.js') }}"></script>
     <script src="{{ url_for('static', filename='js/linechart.js') }}"></script>
