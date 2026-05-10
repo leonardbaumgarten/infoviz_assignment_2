@@ -1,7 +1,7 @@
 'use strict';
 
-/* Layout and colour constants */
-const LC_MARGIN = { top: 20, right: 30, bottom: 40, left: 64 };
+/* Layout: extra-wide left margin to host the legend outside the plot area */
+const LC_MARGIN = { top: 20, right: 30, bottom: 40, left: 180 };
 const LC_COLORS = [
     '#6c8aff', '#34d399', '#f59e0b', '#ec4899', '#a78bfa',
     '#fb923c', '#22d3ee', '#f87171', '#4ade80', '#818cf8'
@@ -18,6 +18,7 @@ let lcTip;
 let lcYearLine;
 let lcYearLabel;
 let lcHasData = false;
+let lcLegendG;
 
 /* Initialize the time-series line chart */
 function initLineChart() {
@@ -64,7 +65,7 @@ function initLineChart() {
     lcLinesG = lcClipG.append('g').attr('class', 'lc-lines-container');
     lcDotsG = lcClipG.append('g').attr('class', 'lc-dots-container');
 
-    /* Year reference line (vertical marker for slider year) */
+    /* Year reference line */
     lcYearLine = lcClipG.append('line')
         .attr('class', 'lc-year-line')
         .attr('y1', 0).attr('y2', lcH)
@@ -86,8 +87,9 @@ function initLineChart() {
         .attr('x', lcW / 2).attr('y', lcH + 36)
         .attr('text-anchor', 'middle').text('Year');
 
-    lcG.append('g').attr('class', 'lc-legend')
-        .attr('transform', `translate(${lcW - 10},10)`);
+    /* Legend positioned in the left margin (outside the data area) */
+    lcLegendG = lcSvg.append('g').attr('class', 'lc-legend')
+        .attr('transform', `translate(14, ${LC_MARGIN.top + 4})`);
 
     lcTip = d3.select('body').append('div')
         .attr('class', 'tooltip')
@@ -204,28 +206,27 @@ function updateLineChartMulti(nameArray, indicator) {
 
     dotSel.exit().transition().duration(200).style('opacity', 0).remove();
 
-    /* Multi-country legend – enter/update/exit */
+    /* Multi-country legend in left margin (enter/update/exit) */
     if (series.length > 1) {
-        const legG = lcG.select('.lc-legend');
-        const legItems = legG.selectAll('g.lc-legend-item')
+        const legItems = lcLegendG.selectAll('g.lc-legend-item')
             .data(series, d => d.name);
 
         const enter = legItems.enter().append('g')
             .attr('class', 'lc-legend-item')
-            .attr('transform', (d, i) => `translate(0, ${i * 16})`);
+            .attr('transform', (d, i) => `translate(0, ${i * 18})`);
         enter.append('rect').attr('width', 10).attr('height', 10).attr('rx', 2);
-        enter.append('text').attr('x', -6).attr('y', 9)
+        enter.append('text').attr('x', 14).attr('y', 9)
             .attr('class', 'axis-label')
-            .attr('text-anchor', 'end');
+            .attr('text-anchor', 'start');
 
         const merged = enter.merge(legItems)
-            .attr('transform', (d, i) => `translate(0, ${i * 16})`);
+            .attr('transform', (d, i) => `translate(0, ${i * 18})`);
         merged.select('rect').attr('fill', d => d.color);
-        merged.select('text').text(d => d.name.length > 18 ? d.name.substring(0, 18) + '…' : d.name);
+        merged.select('text').text(d => d.name.length > 20 ? d.name.substring(0, 20) + '…' : d.name);
 
         legItems.exit().remove();
     } else {
-        lcG.select('.lc-legend').selectAll('*').remove();
+        lcLegendG.selectAll('*').remove();
     }
 
     lcYearLine.raise();
@@ -260,7 +261,7 @@ function clearLineChart() {
     lcHasData = false;
     lcLinesG.selectAll('*').transition().duration(200).style('opacity', 0).remove();
     lcDotsG.selectAll('*').transition().duration(200).style('opacity', 0).remove();
-    lcG.select('.lc-legend').selectAll('*').remove();
+    lcLegendG.selectAll('*').remove();
     lcYearLine.style('display', 'none');
     lcYearLabel.style('display', 'none');
     d3.select('#line-subtitle').text('Select a country on the map or brush in the scatterplot');

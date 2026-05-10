@@ -50,6 +50,10 @@
             <div class="card-header">
                 <h2 class="card-title">World Choropleth</h2>
                 <p class="card-subtitle" id="map-subtitle">Select an indicator to colour the map</p>
+                <div class="country-search-wrapper">
+                    <input type="text" id="country-search" list="country-datalist" placeholder="Search country..." autocomplete="off">
+                    <datalist id="country-datalist"></datalist>
+                </div>
             </div>
             <div class="map-wrapper">
                 <svg id="svg_map"></svg>

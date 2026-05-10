@@ -8,11 +8,15 @@ let map_currentIndicator = null;
 let map_currentYear = null;
 let map_colorScale = null;
 let map_valueLookup = {};
+let mapZoom;
 
 /* ISO3 ↔ name lookups */
 const codeToName = {};
 const nameToCode = {};
 allData.forEach(d => { codeToName[d.Code] = d.Name; nameToCode[d.Name] = d.Code; });
+
+/* Neutral colour interpolator used by both map and scatterplot */
+const MAP_INTERPOLATOR = d3.interpolateViridis;
 
 /* Tooltip indicator list (details-on-demand) */
 const TOOLTIP_INDICATORS = [
@@ -43,17 +47,17 @@ function buildColorScale(lookup) {
     const values = Object.values(lookup).filter(v => v !== null);
     if (values.length === 0) return () => '#2a2d3e';
     const [lo, hi] = d3.extent(values);
-    return d3.scaleSequential().domain([lo, hi]).interpolator(d3.interpolateYlOrRd);
+    return d3.scaleSequential().domain([lo, hi]).interpolator(MAP_INTERPOLATOR);
 }
 
-/* Return the current map fill colour for a given ISO3 code (used by scatter to sync colours) */
+/* Return the current map fill colour for a given ISO3 code */
 function getMapColorForCode(code) {
     if (!map_colorScale || !map_valueLookup) return '#2a2d3e';
     const v = map_valueLookup[code];
     return (v == null) ? '#2a2d3e' : map_colorScale(v);
 }
 
-/* Draw colour legend with increased label spacing */
+/* Draw colour legend with neutral palette */
 function drawLegend(lookup) {
     const container = d3.select('#map-legend');
     container.selectAll('*').remove();
@@ -75,7 +79,7 @@ function drawLegend(lookup) {
         .data(d3.range(0, 1.01, 0.1))
         .enter().append('stop')
         .attr('offset', d => `${d * 100}%`)
-        .attr('stop-color', d => d3.interpolateYlOrRd(d));
+        .attr('stop-color', d => MAP_INTERPOLATOR(d));
 
     svg.append('rect')
         .attr('x', 0).attr('y', 6)
@@ -171,7 +175,7 @@ function clearMapHighlight() {
     countryPaths.classed('selected', false).classed('dimmed', false);
 }
 
-/* Initialize map with TopoJSON geometry */
+/* Initialize map with TopoJSON geometry, d3.zoom, and country search */
 function initMap() {
     const svgEl = document.getElementById('svg_map');
     mapWidth = svgEl.clientWidth || 820;
@@ -186,6 +190,15 @@ function initMap() {
         .translate([mapWidth / 2, mapHeight / 1.85]);
 
     mapPath = d3.geoPath().projection(mapProjection);
+
+    /* Zoom behaviour applied to SVG, transforms the inner <g> */
+    mapZoom = d3.zoom()
+        .scaleExtent([1, 8])
+        .on('zoom', function (event) {
+            mapG.attr('transform', event.transform);
+        });
+
+    mapSvg.call(mapZoom);
 
     d3.json('/static/data/world-topo.json').then(function (world) {
         const features = topojson.feature(world, world.objects.countries).features;
@@ -213,5 +226,34 @@ function initMap() {
             });
 
         if (typeof window.onMapReady === 'function') window.onMapReady();
+    });
+
+    /* Populate country search datalist and bind input event */
+    initCountrySearch();
+}
+
+/* Country search bar: populate datalist and wire up matching */
+function initCountrySearch() {
+    const datalist = document.getElementById('country-datalist');
+    countries.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        datalist.appendChild(opt);
+    });
+
+    const searchInput = document.getElementById('country-search');
+    searchInput.addEventListener('input', function () {
+        const query = this.value.trim();
+        if (!query) {
+            clearMapHighlight();
+            clearScatterHighlight();
+            return;
+        }
+        const matched = countries.find(c => c.toLowerCase() === query.toLowerCase());
+        if (matched) {
+            onMapClick(matched);
+            this.value = '';
+            this.blur();
+        }
     });
 }
